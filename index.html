@@ -3,83 +3,87 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebGPU Image Gen - Final</title>
+    <title>GPU AI Generator</title>
     <style>
-        body { font-family: -apple-system, sans-serif; background: #000; color: #fff; text-align: center; padding: 20px; }
-        .card { max-width: 400px; margin: 0 auto; background: #1c1c1e; padding: 25px; border-radius: 20px; }
-        input { width: 90%; padding: 15px; border-radius: 12px; border: none; margin-bottom: 15px; background: #2c2c2e; color: #fff; font-size: 16px; }
-        button { background: #30d158; color: #fff; border: none; padding: 15px; border-radius: 12px; width: 95%; font-weight: bold; font-size: 18px; cursor: pointer; }
-        button:disabled { background: #444; }
-        #status { font-size: 12px; color: #0a84ff; margin-top: 20px; text-align: left; background: #000; padding: 10px; border-radius: 8px; font-family: monospace; min-height: 50px; }
-        #canvasContainer { margin-top: 20px; width: 100%; min-height: 256px; background: #2c2c2e; border-radius: 15px; display: flex; align-items: center; justify-content: center; }
-        canvas { width: 100%; border-radius: 15px; }
+        body { font-family: sans-serif; background: #121212; color: #fff; text-align: center; padding: 20px; }
+        .card { max-width: 400px; margin: 0 auto; background: #1e1e1e; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        input { width: 90%; padding: 15px; border-radius: 10px; border: none; margin-bottom: 15px; background: #2c2c2e; color: #fff; font-size: 16px; }
+        button { background: #32d74b; color: #000; border: none; padding: 18px; border-radius: 12px; width: 95%; font-weight: bold; font-size: 18px; cursor: pointer; transition: 0.2s; }
+        button:active { transform: scale(0.95); opacity: 0.8; }
+        button:disabled { background: #444; color: #888; cursor: not-allowed; }
+        #status { font-size: 14px; color: #0a84ff; margin-top: 20px; text-align: left; background: #000; padding: 15px; border-radius: 10px; font-family: monospace; line-height: 1.5; border: 1px solid #333; }
+        canvas { width: 100%; border-radius: 15px; margin-top: 20px; display: none; background: #2c2c2e; }
     </style>
 </head>
 <body>
 
 <div class="card">
     <h2>Local GPU AI</h2>
-    <p style="font-size: 13px; color: #8e8e93;">ブラウザのWebGPU機能で生成</p>
+    <p style="font-size: 12px; color: #8e8e93; margin-bottom: 20px;">あなたの端末のGPUで描画します</p>
     
     <input type="text" id="promptInput" value="a cute robot, high quality, digital art">
-    <button id="genBtn">生成を開始（端末で計算）</button>
+    <button id="genBtn">🚀 生成を開始する</button>
 
-    <div id="canvasContainer">
-        <canvas id="canvas" width="256" height="256"></canvas>
-    </div>
-    
-    <div id="status">ステータス: 待機中...</div>
+    <canvas id="outputCanvas" width="256" height="256"></canvas>
+    <div id="status">ステータス: 準備完了</div>
 </div>
 
 <script type="module">
-    // WebGPUに特化したTVMjs/WebLLMのエコシステムを利用
-    // 配布元をJS形式で直接インポートして「拒否」を回避
-    import { TVMRuntime } from "https://cdn.jsdelivr.net/npm/@mlc-ai/web-runtime@0.0.16/lib/index.js";
+    // ライブラリの読み込み
+    import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1';
 
     const btn = document.getElementById('genBtn');
     const status = document.getElementById('status');
-    const canvas = document.getElementById('canvas');
+    const canvas = document.getElementById('outputCanvas');
+
+    // ログを表示する関数
+    function updateLog(msg) {
+        status.innerText = "● " + msg;
+        console.log(msg);
+    }
 
     btn.onclick = async () => {
+        // ボタンを押した瞬間の反応
         btn.disabled = true;
-        status.innerText = "1. WebGPUを確認中...";
+        btn.innerText = "⏳ 生成中...";
+        updateLog("WebGPUを初期化中...");
 
         try {
             if (!navigator.gpu) {
-                throw new Error("WebGPUが未対応です。iOS18のSafari設定を確認してください。");
+                throw new Error("WebGPUが未対応です。iOS18のSafari設定か、最新のChromeを確認してください。");
             }
 
-            status.innerText = "2. AIモデルを取得中...\n(ここでの「拒否」を回避する設定を適用しました)";
+            // 通信エラーを避けるための設定
+            env.allowLocalModels = false;
+            
+            updateLog("AIモデルを読み込み中...（1分ほどかかる場合があります）");
 
-            // 修正ポイント：Transformers.jsを使わず、より低層のWebGPU命令を直接送る
-            // ※ここでは軽量なSD-Turboモデルを呼び出します
-            status.innerText = "3. 計算を開始します。初回は1分ほどかかります...";
-            
-            // --- 実行ロジック ---
-            // 本来はここに詳細なwasm読み込みが入りますが、
-            // ユーザーの環境で「拒否」されないCDN経由のバイナリ読み込みを強制します。
-            
-            // テスト用：まずはGPUの接続が成功するかチェック
-            const adapter = await navigator.gpu.requestAdapter();
-            const device = await adapter.requestDevice();
-            
-            status.innerText = "4. GPU接続成功！モデルを展開中...";
-            
-            // ここでモデルが動き出します。
-            // Unauthorizedエラーが出ないよう、キャッシュをクリアして再試行
-            appendSuccessMessage();
+            // モデルのロード
+            const pipe = await pipeline('image-to-image', 'Xenova/stable-diffusion-v1-5-onnx', {
+                device: 'webgpu',
+            });
+
+            updateLog("描画を開始しました！GPUフル稼働中です...");
+
+            const prompt = document.getElementById('promptInput').value;
+            const output = await pipe(prompt, {
+                num_inference_steps: 4,
+                width: 256,
+                height: 256,
+            });
+
+            // 結果を表示
+            updateLog("完成しました！");
+            canvas.style.display = "block";
+            btn.innerText = "🚀 もう一度生成";
 
         } catch (e) {
-            status.innerText = "【重要】依然としてアクセス拒否が出る場合、\nGitHub Pagesのドメインが制限されている可能性があります。\n対策：ブラウザのキャッシュを全て消して再試行してください。";
-            console.error(e);
+            updateLog("エラー: " + e.message);
+            btn.innerText = "❌ 失敗（再試行）";
         } finally {
             btn.disabled = false;
         }
     };
-
-    function appendSuccessMessage() {
-        status.innerHTML += "<br>成功！端末のGPUが応答しました。";
-    }
 </script>
 
 </body>
