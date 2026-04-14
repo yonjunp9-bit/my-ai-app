@@ -3,69 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI画像生成テスト</title>
+    <title>AI画像生成（修正版）</title>
     <style>
         body { font-family: sans-serif; text-align: center; padding: 20px; background: #1a1a1a; color: white; }
         .card { background: #2a2a2a; padding: 20px; border-radius: 15px; max-width: 400px; margin: 0 auto; }
         button { background: #007bff; color: white; border: none; padding: 15px; border-radius: 10px; width: 100%; font-size: 16px; margin-top: 10px; cursor: pointer; }
-        #status { margin-top: 20px; font-size: 14px; color: #ffcc00; white-space: pre-wrap; word-wrap: break-word; }
+        #status { margin-top: 20px; font-size: 14px; color: #ffcc00; white-space: pre-wrap; }
         input { width: 90%; padding: 10px; margin: 10px 0; border-radius: 5px; border: none; }
+        img { width: 100%; margin-top: 15px; border-radius: 10px; display: none; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>AIテスト</h2>
+    <h2>AI画像生成テスト</h2>
     <input type="text" id="promptInput" value="a cute cat">
     <button id="mainBtn">生成開始</button>
     <div id="status">ここに状況が表示されます</div>
+    <img id="resultImg">
 </div>
 
 <script type="module">
-    // 読み込みエラーをキャッチするためにtry-catchで囲む
+    // ライブラリの読み込み
+    import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1';
+
+    // セキュリティエラーを回避するための設定
+    env.allowLocalModels = false;
+    env.useBrowserCache = true;
+
     const btn = document.getElementById('mainBtn');
     const status = document.getElementById('status');
-
-    console.log("Script started");
-    status.innerText = "プログラム起動。ボタンを押して準備開始。";
+    const img = document.getElementById('resultImg');
 
     btn.onclick = async () => {
         btn.disabled = true;
         btn.innerText = "⌛ 実行中...";
-        status.innerText = "1. ライブラリを読み込んでいます...";
+        img.style.display = "none";
+        status.innerText = "1. AIを読み込んでいます...\n(初回は数分かかります)";
 
         try {
-            // ライブラリの読み込み。URLを変更して安定性を高めました。
-            const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
-            
-            status.innerText = "2. AIモデル(SD1.5)を構築中...\n(ここからダウンロードに時間がかかります)";
-            
-            // WebGPUが使えないPC/スマホでも動くよう、CPUを予備として設定
+            // 最も軽量な画像生成テスト用のモデルを指定
             const generator = await pipeline('image-to-image', 'Xenova/stable-diffusion-v1-5-onnx', {
-                device: 'webgpu', 
-                // WebGPUがダメなら自動でCPUに切り替わるように設定
-            }).catch(async (e) => {
-                console.log("WebGPU failed, trying CPU...");
+                device: 'webgpu'
+            }).catch(async () => {
+                // WebGPUがダメなら通常モードで再試行
                 return await pipeline('image-to-image', 'Xenova/stable-diffusion-v1-5-onnx');
             });
 
-            status.innerText = "3. 画像を計算中...";
-            // テストのため超高速設定（5ステップ）で実行
+            status.innerText = "2. 画像を生成中...";
+
             const output = await generator(document.getElementById('promptInput').value, {
-                num_inference_steps: 5,
+                num_inference_steps: 4,
                 width: 128,
                 height: 128
             });
 
-            status.innerText = "成功！画像が生成されました。";
+            img.src = output.uri;
+            img.style.display = "block";
+            status.innerText = "成功しました！";
             btn.innerText = "もう一度";
 
         } catch (error) {
             console.error(error);
-            // 画面に直接エラーの内容を表示させる
-            status.style.color = "red";
-            status.innerText = "【エラー発生】\n" + error.name + ": " + error.message + 
-                               "\n\n※ネット環境やブラウザの制限を確認してください。";
+            status.innerText = "【エラー】\n" + error.message;
         } finally {
             btn.disabled = false;
         }
