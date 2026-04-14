@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIテストアプリ</title>
+</head>
+<body>
+    <h1>AIアプリ起動テスト</h1>
+    <p>iPhoneのブラウザでAIを動かす準備です。</p>
+    
+    <button id="testBtn" style="padding: 10px 20px; font-size: 16px;">AIエンジンの準備を開始</button>
+    <p id="status" style="margin-top: 20px; color: blue;">ボタンを押してください...</p>
+
+    <script type="module">
+        // Hugging Faceのライブラリ（Transformers.js）を読み込む
+        import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers';
+
+        const btn = document.getElementById('testBtn');
+        const status = document.getElementById('status');
+
+        btn.onclick = async () => {
+            status.innerText = "AIライブラリを読み込んでいます（初回のみ数十秒かかります）...";
+            btn.disabled = true; // 二度押し防止
+            
+            try {
+                // 非常に軽量なテキスト分析モデルで動作確認
+                const pipe = await pipeline('sentiment-analysis', 'Xenova/distilbert-base-uncased-finetuned-sst-2-english');
+                status.innerText = "成功！あなたのデバイスでAIが正常に起動しました。";
+                status.style.color = "green";
+            } catch (e) {
+                status.innerText = "エラーが発生しました: " + e;
+                status.style.color = "red";
+                btn.disabled = false;
+            }
+        };
+    </script>
+</body>
+</html>
