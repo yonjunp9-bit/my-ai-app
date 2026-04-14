@@ -3,39 +3,91 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>診断モード</title>
+    <title>AI画像生成アプリ</title>
     <style>
-        body { font-family: sans-serif; text-align: center; padding: 50px; background: #f0f0f0; }
-        .card { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 400px; margin: 0 auto; }
-        button { background: #007bff; color: white; border: none; padding: 20px 40px; border-radius: 10px; font-size: 18px; cursor: pointer; }
-        #status { margin-top: 20px; color: #666; font-weight: bold; }
+        body { font-family: -apple-system, sans-serif; background: #121212; color: white; text-align: center; padding: 20px; }
+        .card { background: #1e1e1e; border-radius: 20px; padding: 20px; max-width: 400px; margin: 0 auto; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        input { width: 90%; padding: 15px; border-radius: 12px; border: 1px solid #333; margin: 15px 0; background: #2a2a2a; color: white; font-size: 16px; }
+        button { background: #007aff; color: white; border: none; padding: 15px 30px; border-radius: 12px; font-weight: bold; width: 100%; font-size: 18px; transition: 0.3s; }
+        button:disabled { background: #555; cursor: not-allowed; }
+        #status { font-size: 13px; color: #aaa; margin-top: 20px; line-height: 1.5; }
+        #imageArea { margin-top: 25px; width: 100%; min-height: 256px; background: #252525; border-radius: 15px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        img { width: 100%; display: none; }
+        .loader { border: 4px solid #333; border-top: 4px solid #007aff; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; display: none; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>動作診断プログラム</h2>
-    <p>このボタンが反応するかテストします</p>
+    <h2>AI Image Generator</h2>
+    <p style="color: #888;">iPhoneのGPUで描く画像生成AI</p>
     
-    <button id="testBtn">テストボタン</button>
-    <p id="status">読み込み中...</p>
+    <input type="text" id="promptInput" value="a cute white cat, 8k, highly detailed">
+    
+    <button id="mainBtn">生成を開始する</button>
+
+    <div id="imageArea">
+        <div id="loader" class="loader"></div>
+        <p id="placeholder">ここに画像が表示されます</p>
+        <img id="resultImg" alt="生成画像">
+    </div>
+    
+    <div id="status">準備完了！<br>初回は1GBほどのデータを取得します。</div>
 </div>
 
-<script>
-    // ページが読み込まれたら実行
-    window.onload = function() {
-        const btn = document.getElementById('testBtn');
-        const status = document.getElementById('status');
+<script type="module">
+    // WebGPU対応の画像生成ライブラリを読み込み
+    import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1';
 
-        status.innerText = "準備完了！ボタンを押してください。";
+    const btn = document.getElementById('mainBtn');
+    const status = document.getElementById('status');
+    const img = document.getElementById('resultImg');
+    const loader = document.getElementById('loader');
+    const placeholder = document.getElementById('placeholder');
+    const promptInput = document.getElementById('promptInput');
 
-        btn.onclick = function() {
-            // ボタンが押されたら色と文字を変える
-            btn.style.backgroundColor = "#28a745"; // 緑色
-            btn.innerText = "✅ 反応あり！";
-            status.innerText = "プログラムは正常に動いています。";
-            console.log("Button clicked successfully!");
-        };
+    btn.onclick = async () => {
+        const prompt = promptInput.value;
+        
+        // UIを「進行中」に切り替え
+        btn.disabled = true;
+        btn.innerText = "思考中...";
+        loader.style.display = "block";
+        placeholder.style.display = "none";
+        img.style.display = "none";
+        status.innerHTML = "ステップ1: AIの脳(1GB)を読み込み中...<br>※数分かかる場合があります";
+
+        try {
+            // 画像生成モデルの読み込み
+            // ブラウザのWebGPUが使えるか自動判別します
+            const generator = await pipeline('image-to-image', 'Xenova/stable-diffusion-v1-5-onnx', {
+                device: 'webgpu',
+            });
+
+            status.innerHTML = "ステップ2: 画像を計算しています...<br>iPhoneが熱くなることがありますが正常です";
+
+            // 画像生成の実行
+            const output = await generator(prompt, {
+                num_inference_steps: 10,
+                width: 256,
+                height: 256,
+            });
+
+            // 生成結果の表示
+            img.src = output.uri;
+            img.style.display = "block";
+            loader.style.display = "none";
+            status.innerText = "生成完了！おめでとうございます！";
+            btn.innerText = "もう一度作る";
+
+        } catch (e) {
+            console.error(e);
+            status.innerHTML = "エラーが発生しました。<br>機種がWebGPU未対応か、メモリ不足の可能性があります。<br><small>" + e.message + "</small>";
+            btn.innerText = "やり直す";
+        } finally {
+            btn.disabled = false;
+        }
     };
 </script>
 
