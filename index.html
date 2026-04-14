@@ -1,87 +1,44 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>本気の実写AIアプリ</title>
-    <style>
-        body { font-family: -apple-system, sans-serif; background: #000; color: #fff; text-align: center; padding: 20px; }
-        .card { background: #1c1c1e; border-radius: 20px; padding: 20px; max-width: 400px; margin: 0 auto; }
-        input { width: 90%; padding: 12px; border-radius: 10px; border: none; margin: 10px 0; background: #2c2c2e; color: #fff; }
-        button { background: #0a84ff; color: #fff; border: none; padding: 15px 30px; border-radius: 12px; font-weight: bold; width: 90%; }
-        button:disabled { opacity: 0.5; }
-        #status { font-size: 12px; color: #8e8e93; margin-top: 15px; }
-        #imageContainer { margin-top: 20px; width: 100%; min-height: 256px; background: #2c2c2e; border-radius: 15px; display: flex; align-items: center; justify-content: center; }
-        img { width: 100%; border-radius: 15px; display: none; }
-    </style>
-</head>
-<body>
-
-<div class="card">
-    <h2>Real-AI Image Gen</h2>
-    <p style="font-size: 14px;">iPhoneのGPUで画像を生成します</p>
-    
-    <input type="text" id="prompt" placeholder="a realistic portrait of a woman, 8k" value="a realistic portrait of a woman, high quality, highly detailed">
-    <button id="genBtn">画像を生成</button>
-
-    <div id="imageContainer">
-        <p id="placeholderText">ここに画像が出ます</p>
-        <img id="outputImg" />
-    </div>
-    
-    <div id="status">準備中...</div>
-</div>
-
-<script type="module">
-    // WebGPUに特化したRatchetライブラリを読み込む
-    import { Ratchet } from 'https://cdn.jsdelivr.net/npm/@floneum/ratchet@0.1.0/dist/ratchet.js';
-
-    const btn = document.getElementById('genBtn');
-    const status = document.getElementById('status');
-    const outputImg = document.getElementById('outputImg');
-    const placeholderText = document.getElementById('placeholderText');
-
-    let model = null;
-
-    btn.onclick = async () => {
+btn.onclick = async () => {
         const prompt = document.getElementById('prompt').value;
+        
+        // --- ここから追加：即座に反応を出す ---
         btn.disabled = true;
-        status.innerText = "AIエンジンを読み込み中... (初回のみ数分)";
-        placeholderText.innerText = "AIが思考中...";
+        btn.innerText = "⌛ 起動中..."; 
+        btn.style.backgroundColor = "#ff9500"; // オレンジ色に変えて「動いてる感」を出す
+        status.innerText = "モデルを読み込んでいます（初回は約1分）...";
+        placeholderText.innerText = "通信中...";
+        // --- ここまで ---
 
         try {
-            // iPhoneのWebGPUを初期化してSD1.5をロード
             if (!model) {
+                // ここで止まって見えることが多い（ダウンロード中）
                 model = await Ratchet.loadStableDiffusion({
                     model: "stable-diffusion-v1-5", 
-                    quantization: "f16" // iPhone向けに軽量化
+                    quantization: "f16"
                 });
             }
 
-            status.innerText = "画像を計算中... (iPhoneの温度が上がる場合があります)";
+            btn.innerText = "🎨 計算中...";
+            status.innerText = "iPhoneのチップで画像を作成しています...";
             
-            // 画像生成実行
             const result = await model.generate(prompt, {
                 steps: 20,
                 width: 256,
                 height: 256
             });
 
-            // 結果を表示
             outputImg.src = result.url;
             outputImg.style.display = "block";
             placeholderText.style.display = "none";
             status.innerText = "生成完了！";
+            btn.innerText = "もう一度生成";
+            btn.style.backgroundColor = "#0a84ff"; // 元の色に戻す
 
         } catch (e) {
             console.error(e);
-            status.innerText = "エラー: WebGPUが未対応かメモリ不足です。";
-            placeholderText.innerText = "失敗しました";
-        } finally {
+            status.innerText = "エラー: " + e.message;
             btn.disabled = false;
+            btn.innerText = "再試行";
+            btn.style.backgroundColor = "#ff3b30"; // 赤色にする
         }
     };
-</script>
-
-</body>
-</html>
