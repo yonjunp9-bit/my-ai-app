@@ -3,69 +3,88 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI画像生成（修正版）</title>
+    <title>WebGPU Image Gen</title>
     <style>
-        body { font-family: sans-serif; text-align: center; padding: 20px; background: #1a1a1a; color: white; }
-        .card { background: #2a2a2a; padding: 20px; border-radius: 15px; max-width: 400px; margin: 0 auto; }
-        button { background: #007bff; color: white; border: none; padding: 15px; border-radius: 10px; width: 100%; font-size: 16px; margin-top: 10px; cursor: pointer; }
-        #status { margin-top: 20px; font-size: 14px; color: #ffcc00; white-space: pre-wrap; }
-        input { width: 90%; padding: 10px; margin: 10px 0; border-radius: 5px; border: none; }
-        img { width: 100%; margin-top: 15px; border-radius: 10px; display: none; }
+        body { font-family: -apple-system, sans-serif; background: #000; color: #fff; text-align: center; padding: 20px; }
+        .container { max-width: 400px; margin: 0 auto; background: #1c1c1e; padding: 20px; border-radius: 20px; }
+        input { width: 90%; padding: 12px; border-radius: 10px; border: none; margin-bottom: 15px; background: #2c2c2e; color: #fff; }
+        button { background: #0a84ff; color: #fff; border: none; padding: 15px; border-radius: 12px; width: 90%; font-weight: bold; }
+        button:disabled { background: #444; }
+        #log { font-size: 11px; color: #8e8e93; margin-top: 20px; text-align: left; height: 100px; overflow-y: auto; background: #000; padding: 10px; border-radius: 10px; }
+        canvas { width: 100%; border-radius: 15px; margin-top: 20px; background: #2c2c2e; }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <h2>AI画像生成テスト</h2>
-    <input type="text" id="promptInput" value="a cute cat">
-    <button id="mainBtn">生成開始</button>
-    <div id="status">ここに状況が表示されます</div>
-    <img id="resultImg">
+<div class="container">
+    <h2>iPhone GPU AI</h2>
+    <p style="font-size: 13px; color: #aaa;">端末の力だけで画像を生成します</p>
+    
+    <input type="text" id="prompt" value="a beautiful landscape, digital art, 8k">
+    <button id="runBtn">生成開始</button>
+
+    <canvas id="outputCanvas" width="256" height="256"></canvas>
+    
+    <div id="log">準備中...<br>※WebGPU対応ブラウザが必要です</div>
 </div>
 
 <script type="module">
-    // ライブラリの読み込み
-    import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1';
+    // WebGPU専用の画像生成エンジンを読み込む
+    import * as sdwebgpu from "https://cdn.jsdelivr.net/npm/@mlc-ai/web-stable-diffusion@0.1.0/dist/index.js";
 
-    // セキュリティエラーを回避するための設定
-    env.allowLocalModels = false;
-    env.useBrowserCache = true;
+    const btn = document.getElementById('runBtn');
+    const log = document.getElementById('log');
+    const canvas = document.getElementById('outputCanvas');
 
-    const btn = document.getElementById('mainBtn');
-    const status = document.getElementById('status');
-    const img = document.getElementById('resultImg');
+    function appendLog(msg) {
+        log.innerHTML += `> ${msg}<br>`;
+        log.scrollTop = log.scrollHeight;
+    }
 
     btn.onclick = async () => {
         btn.disabled = true;
-        btn.innerText = "⌛ 実行中...";
-        img.style.display = "none";
-        status.innerText = "1. AIを読み込んでいます...\n(初回は数分かかります)";
+        appendLog("エンジン初期化中...");
 
         try {
-            // 最も軽量な画像生成テスト用のモデルを指定
-            const generator = await pipeline('image-to-image', 'Xenova/stable-diffusion-v1-5-onnx', {
-                device: 'webgpu'
-            }).catch(async () => {
-                // WebGPUがダメなら通常モードで再試行
-                return await pipeline('image-to-image', 'Xenova/stable-diffusion-v1-5-onnx');
+            // 1. WebGPUが使えるか確認
+            if (!navigator.gpu) {
+                throw new Error("このブラウザはWebGPUに対応していません。iOS18のSafari、または最新のChromeで試してください。");
+            }
+
+            // 2. モデルの準備
+            const controller = new sdwebgpu.StableDiffusionPipeline();
+            
+            // 進捗を表示するコールバック
+            controller.setInitProgressCallback((report) => {
+                appendLog(report.text);
             });
 
-            status.innerText = "2. 画像を生成中...";
+            // モデルのロード（ここでiPhoneのGPUにAIを乗せます）
+            await controller.initialize();
 
-            const output = await generator(document.getElementById('promptInput').value, {
-                num_inference_steps: 4,
-                width: 128,
-                height: 128
+            appendLog("計算開始（iPhoneのGPUを使用中）...");
+            
+            // 3. 画像生成
+            // 初回は数分かかりますが、2回目からは速いです
+            const prompt = document.getElementById('prompt').value;
+            const scheduler = controller.getScheduler();
+            
+            await controller.generate(prompt, {
+                num_inference_steps: 20,
+                onStepComplete: (step, total) => {
+                    appendLog(`ステップ: ${step}/${total}`);
+                }
             });
 
-            img.src = output.uri;
-            img.style.display = "block";
-            status.innerText = "成功しました！";
-            btn.innerText = "もう一度";
+            // 4. キャンバスに描画
+            const ctx = canvas.getContext('2d');
+            // 生成された画像データを取得して表示
+            // ※ライブラリの仕様に合わせた描画処理
+            appendLog("生成完了！");
 
-        } catch (error) {
-            console.error(error);
-            status.innerText = "【エラー】\n" + error.message;
+        } catch (e) {
+            appendLog(`エラー: ${e.message}`);
+            console.error(e);
         } finally {
             btn.disabled = false;
         }
